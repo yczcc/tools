@@ -15,12 +15,17 @@ VS_VCXPROJ_FILE_TYPE_VAILD = [
     VS_VCXPROJ_FILE_TYPE_CLINCLUDE,
     VS_VCXPROJ_FILE_TYPE_TEXT]
 VS_VCXPROJ_FILE_TYPE = {
-    'cpp': VS_VCXPROJ_FILE_TYPE_CLCOMPILE, 'CPP': VS_VCXPROJ_FILE_TYPE_CLCOMPILE,
-    'c': VS_VCXPROJ_FILE_TYPE_CLCOMPILE, 'C': VS_VCXPROJ_FILE_TYPE_CLCOMPILE,
-    'h': VS_VCXPROJ_FILE_TYPE_CLINCLUDE, 'H': VS_VCXPROJ_FILE_TYPE_CLINCLUDE,
-    'txt': VS_VCXPROJ_FILE_TYPE_TEXT, 'TXT': VS_VCXPROJ_FILE_TYPE_TEXT
+    'cpp': VS_VCXPROJ_FILE_TYPE_CLCOMPILE, # c++源文件
+    'cc': VS_VCXPROJ_FILE_TYPE_CLCOMPILE, # c++源文件
+    'cxx': VS_VCXPROJ_FILE_TYPE_CLCOMPILE, # c++源文件
+    'c': VS_VCXPROJ_FILE_TYPE_CLCOMPILE, # c源文件
+    'h': VS_VCXPROJ_FILE_TYPE_CLINCLUDE, # c++/c头文件
+    'hpp': VS_VCXPROJ_FILE_TYPE_CLINCLUDE, # c++头文件
+    'hxx': VS_VCXPROJ_FILE_TYPE_CLINCLUDE, # c++头文件
+    'txt': VS_VCXPROJ_FILE_TYPE_TEXT # 文本文件
 }
 
+# 获取目录下所有的文件路径
 def list_dir(path, list_name):
     for file in os.listdir(path):
         file_path = os.path.join(path, file)
@@ -30,6 +35,7 @@ def list_dir(path, list_name):
             file_path = file_path.replace('\\', '/')
             list_name.append(file_path)
 
+# 获取指定目录下所有的文件信息，并按照指定的文件类型分类
 def get_source_info_by_dir(source_dir):
     file_lists = os.listdir(source_dir)
     files = []
@@ -39,6 +45,8 @@ def get_source_info_by_dir(source_dir):
         vs_vcxproj_file_type = ''
         # 获取文件名后缀
         file_postfix = os.path.splitext(file)[-1][1:]
+        # 文件名后缀全部转换为小写字母后比较
+        file_postfix = file_postfix.lower()
         file_name = os.path.split(file)[-1][1:]
         file_path = file[len(source_dir)+1:-len(file_name)-2]
         file_path = file_path.replace('/', '\\')
@@ -52,6 +60,7 @@ def get_source_info_by_dir(source_dir):
         file_infos.setdefault(vs_vcxproj_file_type, []).append(
             {'path': file_path, 'file': file})
 
+    # PATH_LIST中记录当前目录下所有文件所在路径（相对路径）
     file_infos['PATH_LIST']=list(set(file_infos['PATH_LIST']))
     # check dir whole set
     path_whole_index = 0
@@ -97,7 +106,7 @@ def modify_origin_vs_vcxproj_xml(vs_vcxproj_dir, vs_vcxproj_name, source_dir):
     #转换为指定的格式:
     time_str = time_now.strftime("%Y%m%d%H%M%S")
     ret = 0
-    # 检查待操作的工程文件
+    # 检查待操作的工程文件vcxproj
     vs_vcxproj_file_name = vs_vcxproj_dir + '/' + vs_vcxproj_name + '.vcxproj'
     if not os.access(vs_vcxproj_file_name, os.R_OK):
         print '[ERROR]vs_vcxproj_file_name can\'t read. ', vs_vcxproj_file_name
@@ -105,7 +114,7 @@ def modify_origin_vs_vcxproj_xml(vs_vcxproj_dir, vs_vcxproj_name, source_dir):
     if not os.access(vs_vcxproj_file_name, os.W_OK):
         print '[ERROR]vs_vcxproj_file_name can\'t write. ', vs_vcxproj_file_name
         ret = -1
-
+    # 检查待操作的工程文件filters
     vs_vcxproj_filters_file_name = vs_vcxproj_dir + '/' + vs_vcxproj_name + '.vcxproj.filters'
     if not os.access(vs_vcxproj_filters_file_name, os.R_OK):
         print '[ERROR]vs_vcxproj_filters_file_name can\'t read. ', vs_vcxproj_filters_file_name
@@ -136,11 +145,9 @@ def modify_origin_vs_vcxproj_xml(vs_vcxproj_dir, vs_vcxproj_name, source_dir):
         if 'ItemGroup' != node_item[1]:
             continue
         node_label = node.get('Label')
-        if 'yczcc' != node_label:
-            continue
-        # node.set('Label', 'zccgis')
-        vs_vcxproj_xml_root.remove(node)
-
+        if None == node_label or 'yczcc' == node_label:  # 其中无Label的ItemGroup为VS自动生成的，可能需要补充
+            vs_vcxproj_xml_root.remove(node)
+    # 添加工程文件
     for file_type in files_info:
         if 'PATH_LIST' == file_type:
             continue
@@ -163,23 +170,19 @@ def modify_origin_vs_vcxproj_xml(vs_vcxproj_dir, vs_vcxproj_name, source_dir):
     filter_path_list = []
     for node in vs_vcxproj_filters_xml_root:
         node_item = tag_uri_and_name(node)
-        if 'ItemGroup' != node_item[1]:
+        if 'ItemGroup' != node_item[1]: # 所有的文件存储在ItemGroup节点中
             continue
         node_label = node.get('Label')
-        if None == node_label:
-            filter_item_list = node.getchildren()
-            for filter_item in filter_item_list:
-                node.remove(filter_item)
+        if None == node_label or 'yczcc' == node_label: # 其中无Label的ItemGroup为VS自动生成的，可能需要补充
+            vs_vcxproj_filters_xml_root.remove(node)
 
-            for filter_path in path_list:
-                filter_item_node = etree.SubElement(node, 'Filter', attrib={'Include': filter_path})
-                filter_item_uuid = str(uuid.uuid5(uuid.NAMESPACE_OID, filter_path))
-                etree.SubElement(filter_item_node, 'UniqueIdentifier').text = '{' + filter_item_uuid + '}'
-            continue
-        elif 'yczcc' != node_label:
-            continue
-        vs_vcxproj_filters_xml_root.remove(node)
-
+    # 添加工程文件目录相对路径unique id
+    itemgroup_ui = etree.SubElement(vs_vcxproj_filters_xml_root, 'ItemGroup', attrib={'Label': 'yczcc'})
+    for filter_path in path_list:
+        filter_item_node = etree.SubElement(itemgroup_ui, 'Filter', attrib={'Include': filter_path})
+        filter_item_uuid = str(uuid.uuid5(uuid.NAMESPACE_OID, filter_path))
+        etree.SubElement(filter_item_node, 'UniqueIdentifier').text = '{' + filter_item_uuid + '}'
+    # 添加工程文件目录
     for file_type in files_info:
         if 'PATH_LIST' == file_type:
             continue
