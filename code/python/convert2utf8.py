@@ -12,8 +12,8 @@ import sys
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
-SOURCE_DIR_WINDOWS = "Z:/xxx/src"
-SOURCE_DIR_LINUX = "/home/xxx/src"
+SOURCE_DIR_WINDOWS = "Z:/code/src"
+SOURCE_DIR_LINUX = "/data/code/src"
 
 SOURCE_DIR = ""
 CONVERT_FILE_TYPES = [
@@ -25,6 +25,7 @@ CONVERT_FILE_TYPES = [
   ".hpp",
   ".hxx"
   ]
+
 
 def detect_os():
     os = system().lower()
